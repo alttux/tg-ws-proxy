@@ -42,6 +42,23 @@ Telegram Desktop → SOCKS5 (127.0.0.1:1080) → TG WS Proxy → WSS (kws*.web.t
 - **Открыть логи** — открыть файл логов
 - **Выход** — остановить прокси и закрыть приложение
 
+### macOS
+
+Перейдите на [страницу релизов](https://github.com/Flowseal/tg-ws-proxy/releases) и скачайте **`TgWsProxy.app`** (`.dmg`-образ). Приложение собирается автоматически через [Github Actions](https://github.com/Flowseal/tg-ws-proxy/actions) из открытого исходного кода.
+
+При первом запуске может появиться предупреждение системы безопасности — откройте через **Системные настройки → Конфиденциальность и безопасность → Всё равно открыть**.
+
+При первом запуске откроется окно с инструкцией по подключению Telegram Desktop. Приложение отображается только в строке меню (Dock скрыт).
+
+**Меню строки меню:**
+- **Открыть в Telegram** — автоматически настроить прокси через `tg://socks` ссылку
+- **Перезапустить прокси** — перезапуск без выхода из приложения
+- **Настройки...** — GUI-редактор конфигурации
+- **Открыть логи** — открыть файл логов
+- **Выход** — остановить прокси и закрыть приложение
+
+> **Примечание про IPv6:** при первом запуске приложение проверяет, включён ли IPv6 на Mac. Если включён — будет показано предупреждение, так как Telegram может пытаться подключаться через IPv6, что не поддерживается прокси.
+
 ## Установка из исходников
 
 ```bash
@@ -52,6 +69,12 @@ pip install -r requirements.txt
 
 ```bash
 python windows.py
+```
+
+### macOS (Tray-приложение)
+
+```bash
+python macos.py
 ```
 
 ### Консольный режим
@@ -98,7 +121,7 @@ python proxy/tg_ws_proxy.py -v
 
 ## Конфигурация
 
-Tray-приложение хранит данные в `%APPDATA%/TgWsProxy`:
+Tray-приложение на Windows хранит данные в `%APPDATA%/TgWsProxy`, на macOS — в `~/Library/Application Support/TgWsProxy`:
 
 ```json
 {
@@ -113,11 +136,18 @@ Tray-приложение хранит данные в `%APPDATA%/TgWsProxy`:
 
 ## Автоматическая сборка
 
-Проект содержит спецификацию PyInstaller ([`windows.spec`](packaging/windows.spec)) и GitHub Actions workflow ([`.github/workflows/build.yml`](.github/workflows/build.yml)) для автоматической сборки.
+Проект содержит спецификации PyInstaller для Windows ([`windows.spec`](packaging/windows.spec)) и macOS ([`macos.spec`](packaging/macos.spec)), а также GitHub Actions workflow ([`.github/workflows/build.yml`](.github/workflows/build.yml)) для автоматической сборки.
 
+**Windows:**
 ```bash
 pip install pyinstaller
 pyinstaller packaging/windows.spec
+```
+
+**macOS:**
+```bash
+pip install pyinstaller
+pyinstaller packaging/macos.spec
 ```
 
 ## Лицензия
