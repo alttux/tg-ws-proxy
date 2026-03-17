@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import psutil
+import signal
 import subprocess
 import sys
 import threading
@@ -42,6 +43,7 @@ _tray_icon: Optional[object] = None
 _config: dict = {}
 _exiting: bool = False
 _lock_file_path: Optional[Path] = None
+_main_pid: Optional[int] = None   # set in --settings subprocess mode
 
 log = logging.getLogger("tg-ws-tray")
 
@@ -276,34 +278,15 @@ def restart_proxy():
 
 
 def _show_dialog(text: str, title: str, kind: str = "info"):
-    """Show a modal dialog on the main thread via tkinter."""
-    import tkinter as tk
-    from tkinter import messagebox
-
-    def _run():
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        if kind == "error":
-            messagebox.showerror(title, text, parent=root)
-        else:
-            messagebox.showinfo(title, text, parent=root)
-        root.destroy()
-
-    # tkinter must run on the main thread; if we're already there, run directly,
-    # otherwise schedule and wait.
-    if threading.current_thread() is threading.main_thread():
-        _run()
-    else:
-        done = threading.Event()
-        def _wrapped():
-            _run()
-            done.set()
-        # pystray on macOS processes the event loop on the main thread via
-        # run_detached / after-callbacks; we post to it via a simple thread.
-        t = threading.Thread(target=_wrapped, daemon=True)
-        t.start()
-        done.wait(timeout=30)
+    """Show a modal dialog via osascript (avoids NSApp conflict with pystray)."""
+    icon = "stop" if kind == "error" else "note"
+    safe_text = text.replace("\\", "\\\\").replace('"', '\\"')
+    safe_title = title.replace("\\", "\\\\").replace('"', '\\"')
+    script = (
+        f'display dialog "{safe_text}" with title "{safe_title}" '
+        f'with icon {icon} buttons {{"OK"}} default button "OK"'
+    )
+    subprocess.run(["osascript", "-e", script], check=False)
 
 
 def _show_error(text: str, title: str = "TG WS Proxy — Ошибка"):
@@ -340,7 +323,11 @@ def _on_restart(icon=None, item=None):
 
 
 def _on_edit_config(icon=None, item=None):
-    threading.Thread(target=_edit_config_dialog, daemon=True).start()
+    # Run settings in a separate process to avoid NSApp conflict between
+    # pystray (owns NSApplication on main thread) and tkinter/customtkinter.
+    subprocess.Popen(
+        [sys.executable, __file__, "--settings", str(os.getpid())]
+    )
 
 
 def _edit_config_dialog():
@@ -454,7 +441,8 @@ def _edit_config_dialog():
         _config.update(new_cfg)
         log.info("Config saved: %s", new_cfg)
 
-        _tray_icon.menu = _build_menu()
+        if _tray_icon is not None:
+            _tray_icon.menu = _build_menu()
 
         from tkinter import messagebox
         if messagebox.askyesno("Перезапустить?",
@@ -462,7 +450,10 @@ def _edit_config_dialog():
                                "Перезапустить прокси сейчас?",
                                parent=root):
             root.destroy()
-            restart_proxy()
+            if _tray_icon is not None:
+                restart_proxy()
+            else:
+                _signal_main_restart()
         else:
             root.destroy()
 
